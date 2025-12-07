@@ -2,1043 +2,348 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RetroOS v10.4 Haunted Edition</title>
-    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <title>Dark Maze Horror</title>
     <style>
-        /* === STYLES === */
-        :root {
-            --bg: #002020;
-            --win: #c0c0c0;
-            --light: #ffffff;
-            --dark: #202080;
-            --black: #000000;
-            --blue: #000020;
-            --font: 'VT323', monospace;
+        body { margin: 0; overflow: hidden; background: #000; }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #888;
+            font-family: monospace;
+            font-size: 16px;
+            pointer-events: none;
+            z-index: 10;
         }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12px; user-select: none; cursor: default; }
-        
-        body { 
-            background: var(--bg); height: 100vh; overflow: hidden;
-            transition: filter 0.5s, background 0.5s;
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: monospace;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border: 1px solid #333;
+            cursor: pointer;
         }
-
-        /* CRT SCANLINE EFFECT */
-        body::after {
-            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 2px, 3px 100%; z-index: 999999; pointer-events: none;
-        }
-
-        /* ICONS */
-        .desktop { padding: 10px; display: flex; flex-direction: column; gap: 20px; position: relative; z-index: 10; align-items: flex-start; }
-        .d-icon { 
-            width: 70px; text-align: center; color: white; text-shadow: 1px 1px #000; cursor: pointer; 
-            display: flex; flex-direction: column; align-items: center; gap: 2px;
-        }
-        .d-icon:active img { filter:  brightness(0.5) sepia(1) hue-rotate(180deg); }
-        .d-icon span { padding: 0 2px; background: transparent; }
-        .d-icon:active span { background: var(--blue); outline: 1px dotted #fff; }
-        .d-icon img { width: 32px; height: 32px; image-rendering: pixelated; }
-
-        /* WINDOWS */
-        .window {
-            position: absolute; background: var(--win);
-            box-shadow: 1px 1px 0 #000, 2px 2px 0 #000;
-            border-top: 1px solid var(--light); border-left: 1px solid var(--light);
-            border-right: 1px solid var(--black); border-bottom: 1px solid var(--black);
-            display: none; flex-direction: column; min-width: 300px; z-index: 100; padding: 2px;
-        }
-        .window.show { display: flex; }
-        .window.active { z-index: 500; box-shadow: 4px 4px 10px rgba(0,0,0,0.5); }
-
-        /* GLITCH EFFECTS */
-        @keyframes float-glitch {
-            0% { transform: translate(0, 0) skew(0deg); }
-            20% { transform: translate(-10px, 5px) skew(5deg); clip-path: inset(10% 0 80% 0); }
-            40% { transform: translate(10px, -5px) skew(-5deg); clip-path: inset(40% 0 10% 0); }
-            60% { transform: translate(-5px, 10px) skew(2deg); clip-path: inset(80% 0 5% 0); }
-            80% { transform: translate(5px, -10px) skew(-2deg); filter: invert(1); }
-            100% { transform: translate(0, 0) skew(0deg); }
-        }
-
-        .window.glitching {
-            animation: float-glitch 0.2s infinite;
-            border: 2px solid red;
-        }
-
-        /* HORROR MODE */
-        body.horror {
-            background: #000;
-            filter: contrast(150%) hue-rotate(90deg) sepia(0.8);
-            animation: shake-screen 0.1s infinite;
-        }
-        body.horror .window {
-            background: #220000;
-            border-color: #550000;
-            color: red;
-        }
-        body.horror .title-bar {
-            background: #330000;
-            color: red;
-        }
-        @keyframes shake-screen {
-            0% { transform: translate(1px, 1px) rotate(0deg); }
-            25% { transform: translate(-1px, -2px) rotate(-1deg); }
-            50% { transform: translate(-3px, 0px) rotate(1deg); }
-            75% { transform: translate(3px, 2px) rotate(0deg); }
-            100% { transform: translate(1px, -1px) rotate(-1deg); }
-        }
-
-        .title-bar {
-            background: linear-gradient(to right, var(--blue), #1084d0); 
-            color: white; padding: 2px 4px; height: 18px;
-            display: flex; justify-content: space-between; align-items: center; font-weight: bold; letter-spacing: 0.5px;
-        }
-        .title-bar.inactive { background: var(--dark); }
-        .btn-x { 
-            width: 16px; height: 14px; background: var(--win); 
-            border: 1px solid; border-color: #fff #000 #000 #fff; 
-            font-size: 9px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: sans-serif; font-weight: bold; margin-left: 2px; color:black;
-        }
-        .btn-x:active { border-color: #000 #fff #fff #000; transform:translate(1px,1px); }
-        .content { padding: 10px; flex: 1; overflow: auto; font-family: 'Courier New', Courier, monospace; }
-
-        /* CONTROLS */
-        .retro-btn {
-            background: var(--win); border: 1px solid; border-color: #fff #000 #000 #fff;
-            padding: 4px 12px; color: #000; cursor: pointer; text-align: center; min-width: 70px;
-        }
-        .retro-btn:active { border-color: #000 #fff #fff #000; padding: 5px 11px 3px 13px; }
-        .retro-input {
-            border: 2px inset #fff; border-color: #808080 #fff #fff #808080;
-            background: #fff; padding: 3px; width: 100%; font-family: 'Courier New', monospace;
-        }
-
-        /* PROGRESS BAR STYLE */
-        .progress-container {
-            width: 100%; height: 10px; background: #333; border: 1px inset #fff; margin: 5px 0; position: relative; cursor: pointer;
-        }
-        .progress-fill {
-            height: 100%; background: #0f0; width: 0%; pointer-events: none;
-        }
-        .time-display {
-            font-family: monospace; color: #0f0; font-size: 10px; display: flex; justify-content: space-between;
-        }
-
-        /* LISTS & CHAT */
-        .list-view { background: #fff; border: 2px inset #808080; height: 160px; overflow-y: scroll; padding: 2px; }
-        .list-item { padding: 3px; cursor: pointer; display: flex; gap: 8px; align-items: center; border: 1px dotted transparent; }
-        .list-item:hover { background: var(--blue); color: white; border: 1px dotted #fff; }
-        
-        .chat-history { height: 200px; background: #fff; border: 2px inset #808080; overflow-y: scroll; margin-bottom: 5px; padding: 4px; font-family: 'Courier New'; font-size: 14px; }
-        .msg b { font-weight: bold; }
-        .msg.sys { color: #888; }
-        .msg.me { color: #000080; }
-        .msg.them { color: #800000; }
-        .msg img { max-width: 100px; border: 1px solid #000; margin-top:2px; display:block;}
-        .file-link { color: blue; text-decoration: underline; cursor: pointer; }
-
-        /* TASKBAR */
-        .taskbar {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 28px;
-            background: var(--win); border-top: 2px solid #fff; display: flex; align-items: center; padding: 2px; z-index: 1000;
-        }
-        .start { border: 2px outset #fff; padding: 2px 6px; font-weight: bold; margin-right: 10px; cursor: pointer; display: flex; align-items: center; gap: 4px; height: 22px; }
-        .start:active, .start.active { border: 2px inset #fff; padding: 3px 5px 1px 7px; }
-        .task { border: 2px outset #fff; padding: 2px 8px; margin-right: 2px; cursor: pointer; background: var(--win); min-width: 100px; height: 22px; display: flex; align-items: center; gap: 5px; overflow: hidden; }
-        .task.active { border: 2px inset #fff; background: #ddd; font-weight: bold; }
-        .task.blink { background: #e6e600; }
-        .tray { margin-left: auto; border: 2px inset #fff; padding: 0 5px; height: 22px; display: flex; align-items: center; background: var(--win); }
-
-        /* START MENU */
-        .start-menu {
-            position: absolute; bottom: 28px; left: 2px; width: 180px;
-            background: var(--win); border: 2px outset #fff; 
-            display: none; flex-direction: column; z-index: 2000; padding: 2px;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-        }
-        .start-menu.show { display: flex; }
-        .sidebar-95 {
-            background: var(--blue); color: white; width: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px;
-            writing-mode: vertical-rl; transform: rotate(180deg); font-weight: bold; letter-spacing: 1px; font-size: 16px;
-            position: absolute; left: 2px; top: 2px; bottom: 2px;
-        }
-        .menu-items { margin-left: 26px; display: flex; flex-direction: column; }
-        .menu-item { padding: 6px 10px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-        .menu-item:hover { background: var(--blue); color: white; }
-
-        /* CUSTOM ALERTS (MODAL) */
-        #modalOverlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.2); z-index: 99999; display: none;
-            align-items: center; justify-content: center;
-        }
-        .msg-box {
-            width: 350px; background: var(--win); border: 2px outset #fff;
-            box-shadow: 4px 4px 10px #000; display: flex; flex-direction: column; padding: 2px;
-        }
-        .msg-body { padding: 15px; display: flex; gap: 15px; align-items: center; }
-        .msg-footer { display: flex; justify-content: center; padding-bottom: 10px; gap: 10px; }
-
-        /* GAMES CSS */
-        .ttt-board { display: grid; grid-template-columns: repeat(3, 50px); gap: 4px; margin: 0 auto; background: #000; padding: 4px; border: 2px inset #fff;}
-        .ttt-cell { width: 50px; height: 50px; background: var(--win); font-size: 30px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .ttt-cell:active { background: #aaa; }
-
-        .mine-board { display: grid; grid-template-columns: repeat(8, 20px); gap: 1px; background: #808080; border: 2px inset #fff; padding: 2px; }
-        .mine-cell { width: 20px; height: 20px; background: var(--win); font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px outset #fff; }
-        .mine-cell.open { border: 1px solid #888; background: #ccc; }
-        .mine-cell.bomb { background: red; }
-
-        /* BROWSER */
-        .browser-bar { display:flex; gap:5px; margin-bottom:5px; border-bottom:1px solid #808080; padding-bottom:5px; }
-        /* Fix for iframe audio */
-        .browser-frame { width:100%; height:100%; border:2px inset #fff; background:#fff; }
-
-        /* INIT OVERLAY TO FIX AUDIO */
-        #initOverlay {
-            position: fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:100000;
-            display:flex; flex-direction:column; align-items:center; justify-content:center; color:#0f0; font-family:monospace;
-            cursor:pointer;
-        }
-
-        /* LOGIN SCREEN */
-        #bios {
-            position: fixed; inset: 0; background: #008080; z-index: 9000;
-            display: none; /* Hidden initially until INIT click */
-            flex-direction: column; justify-content: center; align-items: center;
-        }
-        .login-win { background: var(--win); border: 2px outset #fff; padding: 2px; width: 350px; box-shadow: 5px 5px 15px #000; }
     </style>
+    <!-- Подключаем Three.js и PeerJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <!-- PointerLockControls для управления мышкой -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
-<!-- UNLOCK AUDIO ON ANY BODY CLICK AS FALLBACK -->
-<body onclick="unlockAudioManual()">
+<body>
+
+<div id="ui">
+    ID: <span id="my-id">...</span><br>
+    Игроков рядом: <span id="players-count">0</span><br>
+    [F] - Фонарик
+</div>
+
+<div id="instructions">
+    <h1>ТЕМНЫЙ ЛАБИРИНТ</h1>
+    <p>Кликни сюда, чтобы начать</p>
+    <p>WASD - Ходить | Мышь - Осмотр | F - Фонарик</p>
+    <p style="color: red; font-size: 12px;">Осторожно: очень темно.</p>
+</div>
+
+<script>
+    // --- НАСТРОЙКИ ---
+    const PEER_PREFIX = 'horror-maze-v1-'; // Уникальный префикс для поиска игроков
+    const WALL_HEIGHT = 40;
+    const MAZE_SIZE = 15; // Размер лабиринта (клеток)
     
-    <!-- CLICK TO START (FIXES AUDIO AUTOPLAY) -->
-    <div id="initOverlay" onclick="initSystem(event)">
-        <h1>SYSTEM BOOT</h1>
-        <p>> CLICK HERE TO INITIALIZE AUDIO DRIVERS...</p>
-        <p class="blink">_</p>
-    </div>
+    // --- ИНИЦИАЛИЗАЦИЯ THREE.JS ---
+    const scene = new THREE.Scene();
+    // Очень густой черный туман
+    scene.fog = new THREE.FogExp2(0x000000, 0.15); 
+    scene.background = new THREE.Color(0x000000);
 
-    <!-- SOUNDS -->
-    <audio id="sndStart" src="https://www.myinstants.com/media/sounds/windows-xp-startup.mp3"></audio>
-    <audio id="sndShut" src="https://www.myinstants.com/media/sounds/windows-xp-shutdown.mp3"></audio>
-    <audio id="sndErr" src="https://www.myinstants.com/media/sounds/windows-xp-error.mp3"></audio>
-    <audio id="sndNotify" src="https://www.myinstants.com/media/sounds/windows-xp-balloon.mp3"></audio>
-    <audio id="sndDing" src="https://www.myinstants.com/media/sounds/windows-xp-ding.mp3"></audio>
-    <audio id="sndClose" src="https://www.myinstants.com/media/sounds/windows-xp-recycle.mp3"></audio>
-    <audio id="sndOpen" src="https://www.myinstants.com/media/sounds/windows-xp-start.mp3"></audio>
-    <audio id="sndRing" src="https://www.myinstants.com/media/sounds/windows-xp-ringin.mp3"></audio>
-    <audio id="sndDisc" src="https://www.myinstants.com/media/sounds/windows-xp-hardware-remove.mp3"></audio>
-    <audio id="sndConn" src="https://www.myinstants.com/media/sounds/windows-xp-hardware-insert.mp3"></audio>
-    <audio id="sndType" src="https://www.soundjay.com/mechanical/sounds/mechanical-keyboard-typing-02.mp3"></audio>
-    <audio id="sndClick" src="https://www.myinstants.com/media/sounds/windows-xp-menu-command.mp3"></audio>
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true; // Тени включены
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
 
-    <!-- SPECIAL SOUNDS -->
-    <audio id="sndGlitch" src="https://www.myinstants.com/media/sounds/glitch-sound-effect-src.mp3"></audio>
-    <audio id="sndHorror" src="https://www.myinstants.com/media/sounds/scary-scream.mp3" loop></audio>
+    // --- ЗВУК ---
+    // Простой гул для атмосферы (синтезированный, чтобы не грузить файлы)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playDrone() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = 50; // Низкий гул
+        gain.gain.value = 0.05;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        
+        // Модуляция страха
+        setInterval(() => {
+            osc.frequency.rampToValueAtTime(50 + Math.random() * 20, audioCtx.currentTime + 2);
+        }, 3000);
+    }
+
+    // --- ЛАБИРИНТ (Генерация) ---
+    // 1 - стена, 0 - проход. Простая коробка со столбами.
+    const map = [];
+    for(let x=0; x<MAZE_SIZE; x++){
+        map[x] = [];
+        for(let z=0; z<MAZE_SIZE; z++){
+            if(x===0 || x===MAZE_SIZE-1 || z===0 || z===MAZE_SIZE-1 || Math.random() > 0.8) {
+                map[x][z] = 1; 
+            } else {
+                map[x][z] = 0;
+            }
+        }
+    }
+
+    // Текстуры (процедурные, черные)
+    const wallGeo = new THREE.BoxGeometry(4, WALL_HEIGHT, 4);
+    const wallMat = new THREE.MeshStandardMaterial({ 
+        color: 0x111111, // Почти черный
+        roughness: 0.9 
+    });
     
-    <!-- MUSIC PLAYER -->
-    <audio id="musicPlayer" preload="auto" crossorigin="anonymous"></audio>
+    const floorGeo = new THREE.PlaneGeometry(MAZE_SIZE*4, MAZE_SIZE*4);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
 
-    <!-- CUSTOM ALERT/MSG BOX -->
-    <div id="modalOverlay">
-        <div class="msg-box">
-            <div class="title-bar" id="msgTitle">System Message</div>
-            <div class="msg-body">
-                <img id="msgIcon" src="https://win98icons.alexmeub.com/icons/png/msg_information-0.png" width="32">
-                <div id="msgText" style="flex:1;">Error text here</div>
-            </div>
-            <div class="msg-footer" id="msgButtons">
-                <button class="retro-btn" onclick="closeMsg()">OK</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- LOGIN SCREEN -->
-    <div id="bios">
-        <div class="login-win">
-            <div class="title-bar">Вход в RetroOS v10.4</div>
-            <div style="padding: 20px; display: flex; gap: 15px; align-items: center;">
-                <img src="https://win98icons.alexmeub.com/icons/png/key_win-1.png" width="48">
-                <div style="flex:1;">
-                    <div style="margin-bottom:5px;">Введите имя пользователя для входа в сеть:</div>
-                    <div style="display:flex; align-items:center; margin-bottom:5px;">
-                        <span style="width:60px;">Имя:</span>
-                        <input type="text" id="bootId" class="retro-input" value="User1" maxlength="12">
-                    </div>
-                    <div style="font-size:10px; color:#666;"><label><input type="checkbox" id="chkAudio" checked> Включить звук</label></div>
-                </div>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:5px; padding:10px; padding-top:0;">
-                <button class="retro-btn" id="btnLogin" onclick="tryLogin()">Войти</button>
-            </div>
-        </div>
-        <div id="bootStatus" style="color:yellow; margin-top:10px; font-family:monospace; height:20px;"></div>
-    </div>
-
-    <!-- DESKTOP -->
-    <div class="desktop">
-        <div class="d-icon" ondblclick="winOpen('winMyPc')">
-            <img src="https://win98icons.alexmeub.com/icons/png/computer_explorer-4.png">
-            <span>Мой<br>Компьютер</span>
-        </div>
-        <div class="d-icon" ondblclick="winOpen('winScan')">
-            <img src="https://win98icons.alexmeub.com/icons/png/world-2.png">
-            <span>Сетевое<br>Окружение</span>
-        </div>
-        <div class="d-icon" ondblclick="winOpen('winBrowser')">
-            <img src="https://win98icons.alexmeub.com/icons/png/msie1-3.png">
-            <span>Браузер</span>
-        </div>
-        <div class="d-icon" ondblclick="winOpen('winChat')">
-            <img src="https://win98icons.alexmeub.com/icons/png/msagent-2.png">
-            <span>Чат</span>
-        </div>
-        <div class="d-icon" ondblclick="winOpen('winMedia')">
-            <img src="https://win98icons.alexmeub.com/icons/png/cd_audio_cd_a-4.png">
-            <span>Музыка</span>
-        </div>
-        <div class="d-icon" ondblclick="winOpen('winGames')">
-            <img src="https://win98icons.alexmeub.com/icons/png/game_solitaire-1.png">
-            <span>Игры</span>
-        </div>
-    </div>
-
-    <!-- WINDOW: MY COMPUTER -->
-    <div id="winMyPc" class="window" style="top:50px; left:50px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)">
-            <span>Мой Компьютер</span>
-            <div class="btn-x" onclick="winClose('winMyPc')">X</div>
-        </div>
-        <div class="content" style="background:#fff; color:#000;">
-            <div style="display:flex; gap:10px; align-items:center;">
-                <img src="https://win98icons.alexmeub.com/icons/png/computer_explorer-4.png" width="48">
-                <div>
-                    <b>Система:</b> RetroOS v10.4<br>
-                    <b>Никнейм:</b> <span id="myDisplayId">...</span><br>
-                    <b>ID Сети:</b> <span id="myRealId" style="font-size:9px; color:gray;">...</span>
-                    <div style="margin-top:10px; border-top:1px dotted #000; padding-top:5px;">
-                        <label><input type="checkbox" id="chkDND" onchange="toggleDND()"> 🔕 Не беспокоить</label>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- WINDOW: NETWORK -->
-    <div id="winScan" class="window" style="top:80px; left:80px; width:420px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)">
-            <span>Сетевое Окружение</span>
-            <div class="btn-x" onclick="winClose('winScan')">X</div>
-        </div>
-        <div class="content">
-            <div style="margin-bottom:5px; display:flex; justify-content:space-between;">
-                <span>Глобальная сеть</span>
-                <button class="retro-btn" onclick="scanDeep()">Обновить</button>
-            </div>
-            <div class="list-view" id="netList">
-                <div style="padding:5px; color:#666;">Инициализация сети...</div>
-            </div>
-            <div style="margin-top:8px; border-top:1px solid #808080; padding-top:5px; display:flex; gap:5px; align-items:center;">
-                <img src="https://win98icons.alexmeub.com/icons/png/search_computer-0.png" width="20">
-                <input id="manualId" class="retro-input" style="width:100px" placeholder="Имя друга">
-                <button class="retro-btn" onclick="manualConnect()">Найти</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- WINDOW: CHAT -->
-    <div id="winChat" class="window" style="top:120px; left:200px; width:420px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)">
-            <span>Чат</span>
-            <div class="btn-x" onclick="winClose('winChat')">X</div>
-        </div>
-        <div style="background:#c0c0c0; padding:2px; border-bottom:1px solid #808080; display:flex; gap:2px;">
-             <button class="retro-btn" onclick="clearChat()">Очистить</button>
-             <button class="retro-btn" onclick="disconnectAll()" style="color:#800000;">Отключиться</button>
-             <label class="retro-btn" style="margin-bottom:0; padding-top:4px;">
-                📎 Файл <input type="file" id="fileInput" style="display:none" onchange="sendFile()">
-             </label>
-             <button class="retro-btn" onclick="winOpen('winTicTacToe'); inviteToGame()">Играть X/O</button>
-        </div>
-        <div class="content">
-            <div class="chat-history" id="chatBox">
-                <div class="msg sys">Добро пожаловать в чат.</div>
-            </div>
-            <div style="display:flex; gap:5px; margin-top:5px;">
-                <input type="text" id="chatInput" class="retro-input" disabled onkeypress="if(event.key==='Enter') send()">
-                <button id="btnSend" class="retro-btn" onclick="send()" disabled>Отправить</button>
-            </div>
-            <div style="margin-top:2px; font-size:10px; color:#666;" id="chatStatus">Нет соединения</div>
-        </div>
-    </div>
-
-    <!-- WINDOW: MEDIA PLAYER -->
-    <div id="winMedia" class="window" style="top:200px; left:150px; width:280px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)"><span>Night Player</span><div class="btn-x" onclick="winClose('winMedia')">X</div></div>
-        <div class="content" style="text-align:center; background:#000; color:#0f0;">
-            <div id="trackName" style="border:2px inset #fff; margin-bottom:5px; padding:5px; white-space:nowrap; overflow:hidden;">NO DISK</div>
-            
-            <!-- Progress Bar -->
-            <div class="time-display">
-                <span id="currentTime">00:00</span>
-                <span id="totalTime">00:00</span>
-            </div>
-            <div class="progress-container" onclick="seek(event)">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-
-            <div style="display:flex; justify-content:center; gap:5px; margin-bottom:10px; margin-top:5px;">
-                <button class="retro-btn" onclick="prevTrack()">|&lt;</button>
-                <button class="retro-btn" onclick="playMusic()">▶</button>
-                <button class="retro-btn" onclick="stopMusic()">■</button>
-                <button class="retro-btn" onclick="nextTrack()">&gt;|</button>
-            </div>
-            
-            <div style="margin-bottom:5px;">
-                <label style="font-size:10px;">Громкость: <input type="range" min="0" max="100" value="50" onchange="setVolume(this.value)"></label>
-            </div>
-
-            <label class="retro-btn" style="font-size:10px; display:block; cursor:pointer; background:#444; color:#fff;">
-                📂 Загрузить MP3
-                <input type="file" id="localMusic" accept="audio/*" style="display:none" onchange="playLocalFile()">
-            </label>
-        </div>
-    </div>
-
-    <!-- WINDOW: GAMES FOLDER -->
-    <div id="winGames" class="window" style="top:100px; left:100px; width:300px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)"><span>Игры</span><div class="btn-x" onclick="winClose('winGames')">X</div></div>
-        <div class="content" style="background:#fff; display:flex; gap:15px; flex-wrap:wrap;">
-            <div class="d-icon" style="color:black;" onclick="winOpen('winMine')">
-                <img src="https://win98icons.alexmeub.com/icons/png/game_mine_1-0.png">
-                <span>Сапер<br>(1 игрок)</span>
-            </div>
-            <div class="d-icon" style="color:black;" onclick="initTicTacToeLocal()">
-                <img src="https://win98icons.alexmeub.com/icons/png/game_freecell-0.png">
-                <span>Крестики<br>(С сетью)</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- WINDOW: MINESWEEPER -->
-    <div id="winMine" class="window" style="top:120px; left:120px; width:200px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)"><span>Сапер</span><div class="btn-x" onclick="winClose('winMine')">X</div></div>
-        <div class="content" style="display:flex; justify-content:center; background:#c0c0c0;">
-            <div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <div style="border:2px inset #fff; background:#000; color:red; font-family:monospace; padding:0 2px;">064</div>
-                    <button class="retro-btn" style="min-width:20px; padding:0;" onclick="initMinesweeper()">☺</button>
-                </div>
-                <div id="mineBoard" class="mine-board"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- WINDOW: TIC TAC TOE -->
-    <div id="winTicTacToe" class="window" style="top:150px; left:150px; width:220px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)"><span>Крестики-Нолики</span><div class="btn-x" onclick="winClose('winTicTacToe')">X</div></div>
-        <div class="content" style="text-align:center;">
-            <div id="tttStatus" style="margin-bottom:5px; background:#fff; border:1px inset #000;">Ожидание...</div>
-            <div class="ttt-board" id="tttBoard"></div>
-            <div style="margin-top:5px;">
-                <button class="retro-btn" onclick="inviteToGame()">Пригласить</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- WINDOW: BROWSER -->
-    <div id="winBrowser" class="window" style="top:60px; left:100px; width:600px; height:450px;">
-        <div class="title-bar" onmousedown="drag(event, this.parentNode)"><span>Web Browser</span><div class="btn-x" onclick="winClose('winBrowser')">X</div></div>
-        <div class="content" style="display:flex; flex-direction:column; padding:2px;">
-            <div class="browser-bar">
-                <button class="retro-btn" onclick="goUrl('https://ru.m.wikipedia.org')">Wiki</button>
-                <button class="retro-btn" onclick="goUrl('https://www.bing.com')">Bing</button>
-                <!-- HITMO BUTTON -->
-                <button class="retro-btn" onclick="goUrl('https://rus.hitmotop.com/song/75790958')">Hitmo</button>
-                <input id="urlInput" class="retro-input" placeholder="URL">
-                <button class="retro-btn" onclick="goUrl(document.getElementById('urlInput').value)">Go</button>
-            </div>
-            <div style="flex:1; position:relative;">
-                <!-- ALLOW AUTOPLAY IN IFRAME -->
-                <iframe id="webFrame" class="browser-frame" src="about:blank" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
-            </div>
-        </div>
-    </div>
-
-    <!-- START MENU & TASKBAR -->
-    <div class="start-menu" id="startMenu">
-        <div class="sidebar-95">RetroOS</div>
-        <div class="menu-items">
-            <div class="menu-item" onclick="winOpen('winScan'); toggleStart();">
-                <img src="https://win98icons.alexmeub.com/icons/png/world-2.png" width="24"><span>Сеть</span>
-            </div>
-            <div class="menu-item" onclick="winOpen('winBrowser'); toggleStart();">
-                <img src="https://win98icons.alexmeub.com/icons/png/msie1-3.png" width="24"><span>Браузер</span>
-            </div>
-            <div class="menu-item" onclick="winOpen('winGames'); toggleStart();">
-                <img src="https://win98icons.alexmeub.com/icons/png/game_solitaire-1.png" width="24"><span>Игры</span>
-            </div>
-            <div class="menu-item" onclick="winOpen('winMedia'); toggleStart();">
-                <img src="https://win98icons.alexmeub.com/icons/png/cd_audio_cd_a-4.png" width="24"><span>Музыка</span>
-            </div>
-            <div class="divider"></div>
-            <div class="menu-item" onclick="shutdown()">
-                <img src="https://win98icons.alexmeub.com/icons/png/shut_down_cool-5.png" width="24"><span>Перезагрузка...</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="taskbar">
-        <div class="start-btn-wrap">
-            <div class="start" id="startBtn" onclick="toggleStart()">
-                <img src="https://win98icons.alexmeub.com/icons/png/windows-0.png"> Start
-            </div>
-        </div>
-        <div class="divider" style="width:2px; height:20px; margin:0 4px;"></div>
-        <div id="task_winScan" class="task" onclick="toggleWin('winScan')" style="display:none;">
-            <img src="https://win98icons.alexmeub.com/icons/png/world-2.png"> Сеть
-        </div>
-        <div id="task_winChat" class="task" onclick="toggleWin('winChat')" style="display:none;">
-            <img src="https://win98icons.alexmeub.com/icons/png/msagent-2.png"> Чат
-        </div>
-        <div id="task_winBrowser" class="task" onclick="toggleWin('winBrowser')" style="display:none;">
-            <img src="https://win98icons.alexmeub.com/icons/png/msie1-3.png"> Web
-        </div>
-        <div class="tray">
-            <span id="clock">12:00</span>
-        </div>
-    </div>
-
-    <script>
-        // --- SYSTEM INIT ---
-        function initSystem(e) {
-            if(e) e.stopPropagation(); 
-            unlockAudioManual();
-            document.getElementById('initOverlay').style.display = 'none';
-            document.getElementById('bios').style.display = 'flex';
-        }
-
-        // Global manual unlocker
-        function unlockAudioManual() {
-             const audioIds = ['sndStart', 'sndShut', 'sndDing', 'sndNotify', 'sndErr', 'sndClose', 'sndOpen', 'musicPlayer', 'sndClick', 'sndRing', 'sndDisc', 'sndConn', 'sndGlitch', 'sndHorror'];
-             audioIds.forEach(id => {
-                 const el = document.getElementById(id);
-                 if(el) {
-                     el.muted = true;
-                     el.play().then(() => {
-                         el.pause(); el.currentTime = 0; el.muted = false; 
-                     }).catch(() => {});
-                 }
-             });
-        }
-
-        // --- CONFIG ---
-        const MQTT_HOST = "broker.emqx.io";
-        const MQTT_PORT = 8084; 
-        const MQTT_PATH = "/mqtt";
-        const TOPIC_PREFIX = "retro_v103_fix_";
-        const TOPIC_BEACON = TOPIC_PREFIX + "beacon";
-        const TOPIC_CHECK = TOPIC_PREFIX + "check";
-
-        let myName = "";
-        let myPeerId = ""; 
-        let peer = null;
-        let mqtt = null;
-        let connections = [];
-        let networkMap = {}; 
-        let tttGame = { active: false, turn: null, board: [], symbol: '', opponent: null };
-        let dndMode = false;
-        let startSpamCount = 0;
-        let horrorMode = false;
-
-        // --- MUSIC PLAYLIST ---
-        const playlist = [
-            { name: "Bling-Bang-Bang-Born", src: "https://dn720309.ca.archive.org/0/items/bling-bang-bang-born-mashle-magic-and-muscles-season-2-op/Bling-Bang-Bang-Born%20-%20MASHLE%20MAGIC%20AND%20MUSCLES%20Season%202%20OP.mp3" },
-            { name: "Roblox Doors - Elevator Jam", src: "https://dn720004.ca.archive.org/0/items/doors-ost/Elevator%20Jam.mp3" },
-            { name: "Roblox Piggy - Main Menu", src: "https://dn720004.ca.archive.org/0/items/piggy-ost/Main%20Menu.mp3" },
-            { name: "Monkeys Spinning Monkeys (Kevin MacLeod)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Kevin_MacLeod/Oddities/Kevin_MacLeod_-_Monkeys_Spinning_Monkeys.mp3" },
-            { name: "NCS: Warriyo - Mortals (Feat. Laura Brehm)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Warriyo/NCS_Releases/Warriyo_-_Mortals_feat_Laura_Brehm.mp3" }, 
-            { name: "NCS: Cartoon - On & On (Feat. Daniel Levi)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/ccCommunity/Cartoon/NCS_Releases/Cartoon_-_On__On_feat_Daniel_Levi.mp3" },
-            { name: "Cool Vibes (Jazz Noir)", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Kevin_MacLeod/Jazz_Sampler/Kevin_MacLeod_-_Cool_Vibes.mp3" },
-            { name: "Creepy - Mirage Style", src: "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Starbox/Bit_Bop/Starbox_-_05_-_Digital_Sunset.mp3" }
-        ];
-        let currentTrackIdx = 0;
-        const audioPlayer = document.getElementById('musicPlayer');
-        audioPlayer.volume = 0.5;
-
-        function playMusic() {
-            if(!audioPlayer.src || !audioPlayer.src.includes(playlist[currentTrackIdx].src)) {
-                 audioPlayer.src = playlist[currentTrackIdx].src;
-            }
-            audioPlayer.play().then(()=>{
-                document.getElementById('trackName').innerText = (currentTrackIdx+1) + ". " + playlist[currentTrackIdx].name;
-            }).catch(e => {
-                document.getElementById('trackName').innerText = "ERR: Click Play to Start";
-            });
-        }
-        function stopMusic() { audioPlayer.pause(); }
-        function nextTrack() { currentTrackIdx = (currentTrackIdx + 1) % playlist.length; audioPlayer.src = playlist[currentTrackIdx].src; playMusic(); }
-        function prevTrack() { currentTrackIdx = (currentTrackIdx - 1 + playlist.length) % playlist.length; audioPlayer.src = playlist[currentTrackIdx].src; playMusic(); }
-        
-        audioPlayer.onended = nextTrack;
-        audioPlayer.ontimeupdate = updateProgress;
-
-        function updateProgress() {
-            const cur = audioPlayer.currentTime;
-            const dur = audioPlayer.duration;
-            if(isNaN(dur)) return;
-            const pct = (cur / dur) * 100;
-            document.getElementById('progressFill').style.width = pct + '%';
-            document.getElementById('currentTime').innerText = formatTime(cur);
-            document.getElementById('totalTime').innerText = formatTime(dur);
-        }
-
-        function formatTime(s) {
-            const min = Math.floor(s / 60);
-            const sec = Math.floor(s % 60);
-            return (min<10?'0':'')+min + ':' + (sec<10?'0':'')+sec;
-        }
-
-        function seek(e) {
-            const rect = e.target.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const w = rect.width;
-            const pct = x / w;
-            if(audioPlayer.duration) {
-                audioPlayer.currentTime = pct * audioPlayer.duration;
+    const walls = [];
+    for(let x=0; x<MAZE_SIZE; x++){
+        for(let z=0; z<MAZE_SIZE; z++){
+            if(map[x][z] === 1){
+                const wall = new THREE.Mesh(wallGeo, wallMat);
+                wall.position.set((x - MAZE_SIZE/2)*4, WALL_HEIGHT/2, (z - MAZE_SIZE/2)*4);
+                wall.castShadow = true;
+                wall.receiveShadow = true;
+                scene.add(wall);
+                walls.push(wall);
             }
         }
+    }
 
-        function setVolume(v) { audioPlayer.volume = v / 100; }
-        function playLocalFile() {
-            const f = document.getElementById('localMusic').files[0];
-            if(f) {
-                const url = URL.createObjectURL(f);
-                audioPlayer.src = url;
-                audioPlayer.play();
-                document.getElementById('trackName').innerText = "FILE: " + f.name;
-            }
+    // --- ИГРОК И ФОНАРИК ---
+    const controls = new THREE.PointerLockControls(camera, document.body);
+    
+    // Старт игры по клику
+    const instructions = document.getElementById('instructions');
+    instructions.addEventListener('click', () => {
+        controls.lock();
+        playDrone();
+    });
+    controls.addEventListener('lock', () => instructions.style.display = 'none');
+    controls.addEventListener('unlock', () => instructions.style.display = 'block');
+
+    // Фонарик игрока
+    const flashlight = new THREE.SpotLight(0xffffff, 0, 40, Math.PI/6, 0.5, 1);
+    flashlight.position.set(0, 0, 0); // Прикреплен к камере
+    flashlight.castShadow = true;
+    flashlight.target = camera; // Светит туда, куда смотрит камера
+    camera.add(flashlight); // Добавляем фонарик в "руки" (камеру)
+    scene.add(camera);
+
+    // Слабый фоновый свет (чтобы хоть что-то видеть без фонарика)
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.02); 
+    scene.add(ambientLight);
+
+    let isFlashlightOn = false;
+    window.addEventListener('keydown', (e) => {
+        if(e.code === 'KeyF') {
+            isFlashlightOn = !isFlashlightOn;
+            flashlight.intensity = isFlashlightOn ? 2 : 0; // Вкл/Выкл
+            // Отправляем статус фонарика другим
+            broadcast({ type: 'flashlight', on: isFlashlightOn });
         }
+    });
 
-        // --- CUSTOM ALERTS ---
-        function showMsg(title, text, iconType='info', callback=null) {
-            document.getElementById('msgTitle').innerText = title;
-            document.getElementById('msgText').innerText = text;
-            
-            let iconUrl = "https://win98icons.alexmeub.com/icons/png/msg_information-0.png";
-            if(iconType === 'error') iconUrl = "https://win98icons.alexmeub.com/icons/png/msg_error-0.png";
-            if(iconType === 'question') iconUrl = "https://win98icons.alexmeub.com/icons/png/msg_question-0.png";
-            document.getElementById('msgIcon').src = iconUrl;
+    // --- УПРАВЛЕНИЕ ---
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
 
-            const foot = document.getElementById('msgButtons');
-            foot.innerHTML = '';
-
-            if(iconType === 'question') {
-                const btnYes = document.createElement('button');
-                btnYes.className = 'retro-btn'; btnYes.innerText = 'Да';
-                btnYes.onclick = () => { closeMsg(); if(callback) callback(true); };
-                const btnNo = document.createElement('button');
-                btnNo.className = 'retro-btn'; btnNo.innerText = 'Нет';
-                btnNo.onclick = () => { closeMsg(); if(callback) callback(false); };
-                foot.appendChild(btnYes); foot.appendChild(btnNo);
-            } else {
-                const btnOk = document.createElement('button');
-                btnOk.className = 'retro-btn'; btnOk.innerText = 'OK';
-                btnOk.onclick = () => { closeMsg(); if(callback) callback(); };
-                foot.appendChild(btnOk);
-            }
-            
-            if(iconType==='error') playSound('sndErr');
-            else if(iconType==='question') {
-                if(title.includes('звонок') || title.includes('зовет')) playSound('sndRing');
-                else playSound('sndNotify');
-            }
-            else playSound('sndDing');
-
-            document.getElementById('modalOverlay').style.display = 'flex';
+    const onKeyDown = (e) => {
+        switch (e.code) {
+            case 'ArrowUp': case 'KeyW': moveForward = true; break;
+            case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
+            case 'ArrowDown': case 'KeyS': moveBackward = true; break;
+            case 'ArrowRight': case 'KeyD': moveRight = true; break;
         }
-        function closeMsg() { document.getElementById('modalOverlay').style.display = 'none'; }
-
-        // --- BOOT & LOGIN ---
-        function tryLogin() {
-            const val = document.getElementById('bootId').value.trim();
-            if(!val) return showMsg("Ошибка", "Введите имя!", "error");
-            if(val.length < 3) return showMsg("Ошибка", "Имя слишком короткое.", "error");
-
-            myName = val;
-            document.getElementById('btnLogin').disabled = true;
-            document.getElementById('bootStatus').innerText = "Подключение к сети...";
-            checkNameWithTimeout(val);
+    };
+    const onKeyUp = (e) => {
+        switch (e.code) {
+            case 'ArrowUp': case 'KeyW': moveForward = false; break;
+            case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+            case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+            case 'ArrowRight': case 'KeyD': moveRight = false; break;
         }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
 
-        function checkNameWithTimeout(name) {
-            let finished = false;
-            const cid = "check_" + Math.random().toString(16).substr(2, 8);
-            const tmpClient = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, MQTT_PATH, cid);
+    // --- МУЛЬТИПЛЕЕР (PeerJS) ---
+    const peer = new Peer(null, { debug: 1 }); // null = авто-ID
+    let myId = null;
+    const conns = {}; // Подключения к другим игрокам
+    const otherPlayers = {}; // 3D объекты других игроков
 
-            const safetyTimer = setTimeout(() => {
-                if(!finished) { finished = true; try { tmpClient.disconnect(); } catch(e){} startOS(name); }
-            }, 3000);
+    peer.on('open', (id) => {
+        myId = id;
+        document.getElementById('my-id').innerText = id;
+        console.log('My ID:', id);
+        connectToOthers(); // Пытаемся найти кого-то (упрощенно: нужно знать ID)
+    });
 
-            let taken = false;
-            tmpClient.onMessageArrived = (msg) => {
-                if(finished) return;
-                try {
-                    const d = JSON.parse(msg.payloadString);
-                    if(d.type === 'EXIST' && d.name === name) taken = true;
-                } catch(e){}
-            };
+    peer.on('connection', (conn) => {
+        setupConnection(conn);
+    });
 
-            tmpClient.connect({
-                useSSL: true,
-                timeout: 2,
-                onSuccess: () => {
-                    if(finished) return;
-                    tmpClient.subscribe(TOPIC_CHECK);
-                    tmpClient.send(TOPIC_CHECK, JSON.stringify({type:'QUERY', name: name}));
-                    
-                    setTimeout(() => {
-                        if(finished) return;
-                        finished = true;
-                        clearTimeout(safetyTimer);
-                        tmpClient.disconnect();
+    // В реальном проекте тут нужен сервер списка комнат. 
+    // Для демо мы просто попробуем соединиться с теми, кто передаст свой ID вручную,
+    // или (хак) можно использовать URL параметры ?join=ID
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinId = urlParams.get('join');
+    
+    function connectToOthers() {
+        if (joinId && joinId !== myId) {
+            const conn = peer.connect(joinId);
+            setupConnection(conn);
+        }
+    }
 
-                        if(taken) {
-                            showMsg("Ошибка входа", "Имя занято!", "error");
-                            document.getElementById('btnLogin').disabled = false;
-                            document.getElementById('bootStatus').innerText = "";
-                        } else {
-                            startOS(name);
-                        }
-                    }, 1500);
-                },
-                onFailure: () => { if(!finished) { finished = true; clearTimeout(safetyTimer); startOS(name); } }
-            });
-        }
-
-        function startOS(name) {
-            document.getElementById('bios').style.display = "none";
-            playSound('sndStart');
-            setInterval(updateClock, 1000);
-            document.getElementById('myDisplayId').innerText = name;
-            initPeer(name);
-            initMinesweeper();
-            document.getElementById('trackName').innerText = "Ready";
-        }
-
-        function shutdown() {
-            playSound('sndShut');
-            setTimeout(() => {
-                location.reload();
-            }, 3000);
-        }
-
-        function toggleDND() { dndMode = document.getElementById('chkDND').checked; }
-
-        // --- P2P ---
-        function initPeer(name) {
-            const pid = "r103_" + name.replace(/[^a-z0-9]/gi,'') + "_" + Math.floor(Math.random()*9999);
-            peer = new Peer(pid);
-            peer.on('open', (id) => { myPeerId = id; document.getElementById('myRealId').innerText = id; initMQTT_Main(); });
-            
-            peer.on('connection', (c) => {
-                c.on('open', () => {
-                    if(dndMode) { c.close(); return; } 
-                    const caller = (c.metadata && c.metadata.name) ? c.metadata.name : "Неизвестный";
-                    showMsg("Входящий звонок", "Пользователь " + caller + " звонит. Ответить?", "question", (ans) => {
-                        if(ans) { setupConn(c, caller); c.send({type:'SYS', txt:'OK'}); winOpen('winChat'); playSound('sndConn'); } 
-                        else { c.close(); playSound('sndDisc'); } 
-                    });
-                });
-            });
-        }
-
-        function setupConn(c, name) {
-            c.customName = name;
-            connections.push(c);
-            addLog("Система", "Подключен: " + name);
-            updateStatus();
-            c.on('data', (d) => {
-                if(d.type === 'MSG') {
-                    addLog(name, d.content);
-                    playSound('sndNotify'); 
-                    const t = document.getElementById('task_winChat');
-                    if(!t.classList.contains('active')) t.classList.add('blink');
-                }
-                else if (d.type === 'FILE') {
-                    const blob = new Blob([d.data]);
-                    const url = URL.createObjectURL(blob);
-                    addLog(name, `Отправил файл: <br><a class="file-link" href="${url}" download="${d.name}">${d.name}</a>`);
-                    playSound('sndNotify');
-                }
-                else if (d.type === 'GAME_INVITE') {
-                    showMsg("Игра", name + " зовет в Крестики-Нолики.", "question", (y)=>{
-                        if(y) { winOpen('winTicTacToe'); startGame(c, 'O'); c.send({type:'GAME_ACCEPT'}); }
-                        else { c.send({type:'MSG', content:'[Отклонил игру]'}); playSound('sndDisc'); }
-                    });
-                }
-                else if (d.type === 'GAME_ACCEPT') { startGame(c, 'X'); playSound('sndDing'); }
-                else if (d.type === 'GAME_MOVE') { handleGameMove(d.idx); }
-            });
-            c.on('close', () => {
-                connections = connections.filter(x => x !== c);
-                addLog("Система", name + " отключился.");
-                playSound('sndDisc'); 
-                updateStatus();
-            });
-        }
-
-        // --- MQTT ---
-        function initMQTT_Main() {
-            const cid = "main_" + Math.random().toString(16).substr(2, 8);
-            mqtt = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, MQTT_PATH, cid);
-
-            mqtt.onMessageArrived = (msg) => {
-                try {
-                    const d = JSON.parse(msg.payloadString);
-                    if(msg.destinationName === TOPIC_CHECK) {
-                        if(d.type === 'QUERY' && d.name === myName) {
-                            mqtt.send(TOPIC_CHECK, JSON.stringify({type:'EXIST', name: myName}));
-                        }
-                    } else if(msg.destinationName === TOPIC_BEACON) {
-                        if(d.peerId !== myPeerId) addNetItem(d);
-                    }
-                } catch(e){}
-            };
-
-            mqtt.connect({
-                useSSL: true,
-                onSuccess: () => {
-                    mqtt.subscribe(TOPIC_BEACON);
-                    mqtt.subscribe(TOPIC_CHECK);
-                    setInterval(() => { if(mqtt.isConnected()) mqtt.send(TOPIC_BEACON, JSON.stringify({peerId:myPeerId, name:myName})); }, 4000);
-                    document.getElementById('netList').innerHTML = ""; scanDeep();
-                }
-            });
-        }
-
-        function addNetItem(d) {
-            networkMap[d.name] = d.peerId;
-            if(document.getElementById("u_"+d.peerId)) return;
-            const div = document.createElement('div');
-            div.id = "u_"+d.peerId; div.className = 'list-item';
-            div.innerHTML = `<img src="https://win98icons.alexmeub.com/icons/png/computer_explorer-4.png" width="16"> <span>${d.name}</span>`;
-            div.onclick = () => connectUser(d.peerId, d.name);
-            document.getElementById('netList').appendChild(div);
-        }
-        function scanDeep() {
-            document.getElementById('netList').innerHTML = "<div style='padding:5px;color:#666'>Поиск компьютеров...</div>";
-            networkMap = {};
-            if(mqtt && mqtt.isConnected()) mqtt.send(TOPIC_BEACON, JSON.stringify({peerId:myPeerId, name:myName}));
-        }
-
-        // --- CHAT & GAMES ---
-        function manualConnect() {
-            const name = document.getElementById('manualId').value;
-            if(networkMap[name]) connectUser(networkMap[name], name);
-            else showMsg("Поиск", "Пользователь не найден.", "error");
-        }
-        function connectUser(pid, name) {
-            if(connections.find(c => c.peer === pid)) return;
-            winOpen('winChat'); addLog("Система", "Вызов " + name + "...");
-            playSound('sndOpen'); 
-            const c = peer.connect(pid, { metadata: { name: myName } });
-            c.on('open', () => { c.send({type:'SYS', txt:'HELLO'}); setupConn(c, name); playSound('sndConn'); });
-            c.on('error', () => addLog("Система", "Ошибка соединения."));
-        }
-        function send() {
-            const inp = document.getElementById('chatInput');
-            const txt = inp.value; if(!txt) return;
-            connections.forEach(c => c.send({type:'MSG', content:txt}));
-            addLog("Я", txt); inp.value = "";
-        }
-        function sendFile() {
-            const f = document.getElementById('fileInput').files[0]; if(!f) return;
-            connections.forEach(c => c.send({type:'FILE', name:f.name, data:f}));
-            addLog("Я", "Отправлен файл: " + f.name);
-        }
-        function addLog(who, txt) {
-            const box = document.getElementById('chatBox');
-            const cls = who==='Я'?'me':(who==='Система'?'sys':'them');
-            box.innerHTML += `<div class="msg ${cls}"><b>${who}:</b> ${txt}</div>`;
-            box.scrollTop = box.scrollHeight;
-        }
-        function disconnectAll() { connections.forEach(c => c.close()); connections = []; addLog("Система", "Все отключены."); playSound('sndDisc'); }
-        function clearChat() { document.getElementById('chatBox').innerHTML = ""; }
-        function updateStatus() {
-            const active = connections.length > 0;
-            document.getElementById('chatInput').disabled = !active;
-            document.getElementById('btnSend').disabled = !active;
-            document.getElementById('chatStatus').innerText = active ? "Подключено: " + connections.map(c=>c.customName).join(', ') : "Нет соединений";
-        }
-        
-        function inviteToGame() { if(connections.length===0) return alert("Нет соединений!"); connections[0].send({type:'GAME_INVITE'}); document.getElementById('tttStatus').innerText = "Приглашение отправлено..."; }
-        function startGame(conn, sym) { tttGame = { active:true, turn: 'X', board: Array(9).fill(null), symbol: sym, opponent: conn }; renderTTT(); document.getElementById('tttStatus').innerText = "Вы играете за: " + sym; }
-        function renderTTT() {
-            const b = document.getElementById('tttBoard'); b.innerHTML = "";
-            tttGame.board.forEach((val, i) => {
-                const c = document.createElement('div'); c.className = 'ttt-cell'; c.innerText = val || "";
-                if(val === 'X') c.style.color = "red"; if(val === 'O') c.style.color = "blue";
-                c.onclick = () => clickTTT(i); b.appendChild(c);
-            });
-        }
-        function clickTTT(i) {
-            if(!tttGame.active || tttGame.board[i] || tttGame.turn !== tttGame.symbol) return;
-            tttGame.board[i] = tttGame.symbol; tttGame.turn = tttGame.symbol === 'X' ? 'O' : 'X';
-            tttGame.opponent.send({type:'GAME_MOVE', idx: i}); renderTTT(); checkWin();
-            document.getElementById('tttStatus').innerText = "Ход противника...";
-        }
-        function handleGameMove(i) {
-            tttGame.board[i] = tttGame.symbol === 'X' ? 'O' : 'X'; tttGame.turn = tttGame.symbol;
-            renderTTT(); checkWin(); if(tttGame.active) document.getElementById('tttStatus').innerText = "Ваш ход!";
-        }
-        function checkWin() {
-            const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-            let w = null; for(let c of wins) { if(tttGame.board[c[0]] && tttGame.board[c[0]] === tttGame.board[c[1]] && tttGame.board[c[0]] === tttGame.board[c[2]]) w = tttGame.board[c[0]]; }
-            if(w) { tttGame.active = false; document.getElementById('tttStatus').innerText = w === tttGame.symbol ? "ПОБЕДА!" : "Поражение"; playSound(w===tttGame.symbol ? 'sndDing' : 'sndErr'); } 
-            else if(!tttGame.board.includes(null)) { tttGame.active = false; document.getElementById('tttStatus').innerText = "Ничья!"; }
-        }
-        function initTicTacToeLocal() { winOpen('winTicTacToe'); renderTTT(); }
-
-        // --- MINESWEEPER ---
-        let mineGrid = [];
-        function initMinesweeper() {
-            const b = document.getElementById('mineBoard'); b.innerHTML = ""; mineGrid = [];
-            for(let i=0; i<64; i++) mineGrid.push({ bomb: Math.random()<0.15, open: false });
-            mineGrid.forEach((c, i) => { const el = document.createElement('div'); el.className = 'mine-cell'; el.id = 'm_'+i; el.onclick = () => openMine(i); b.appendChild(el); });
-        }
-        function getNeighbors(i) {
-            const row = Math.floor(i / 8); const col = i % 8; const neighbors = [];
-            for(let r = row-1; r <= row+1; r++) { for(let c = col-1; c <= col+1; c++) { if(r >= 0 && r < 8 && c >= 0 && c < 8) { const idx = r * 8 + c; if(idx !== i) neighbors.push(idx); } } }
-            return neighbors;
-        }
-        function openMine(i) {
-            const c = mineGrid[i]; if(c.open) return; c.open = true;
-            const el = document.getElementById('m_'+i); el.classList.add('open');
-            if(c.bomb) { el.classList.add('bomb'); el.innerText = "💣"; playSound('sndErr'); showMsg("Сапер", "Взрыв! Игра окончена.", "error"); } 
-            else {
-                const neighbors = getNeighbors(i); let n = 0; neighbors.forEach(idx => { if(mineGrid[idx].bomb) n++; });
-                if(n > 0) { el.innerText = n; el.style.color = ['blue','green','red','navy'][n-1]||'black'; } else { neighbors.forEach(idx => openMine(idx)); }
-            }
-        }
-
-        // --- BROWSER URL & HORROR TRIGGER ---
-        function goUrl(url) { 
-            if(url.trim() === "400") {
-                triggerHorrorMode();
-                return;
-            }
-            if(!url.startsWith('http')) url = 'https://' + url; 
-            document.getElementById('webFrame').src = url; 
-        }
-
-        function updateClock() { document.getElementById('clock').innerText = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
-        
-        function playSound(id) { 
-            if(!document.getElementById('chkAudio').checked) return; 
-            const el = document.getElementById(id); 
-            if(el) {
-                el.currentTime=0; 
-                if(id === 'sndRing') el.volume = 0.8; 
-                else el.volume = 1.0;
-                el.play().catch(e => console.warn("Sound blocked: " + id, e)); 
-            }
-        }
-
-        // --- GLITCH & OPEN LOGIC ---
-        function winOpen(id) {
-            const w = document.getElementById(id);
-            w.classList.add('show');
-            const t = document.getElementById('task_'+id);
-            if(t) t.style.display = 'flex';
-            bringFront(w);
-
-            // 20% Chance of Glitch
-            if (Math.random() < 0.2) {
-                // Glitch Mode
-                w.classList.add('glitching');
-                playSound('sndGlitch');
-                // Remove glitch after 5 seconds
-                setTimeout(() => {
-                    w.classList.remove('glitching');
-                }, 5000);
-            } else {
-                // Normal Mode
-                playSound('sndOpen');
-            }
-        }
-
-        // --- HORROR MODE LOGIC ---
-        function triggerHorrorMode() {
-            if(horrorMode) return;
-            horrorMode = true;
-            document.body.classList.add('horror');
-            
-            // Play horror sound loop
-            const h = document.getElementById('sndHorror');
-            h.volume = 1.0;
-            h.play();
-
-            // Randomly open/move windows
-            setInterval(() => {
-                const windows = document.querySelectorAll('.window');
-                windows.forEach(w => {
-                    w.style.left = Math.random() * (window.innerWidth - 200) + 'px';
-                    w.style.top = Math.random() * (window.innerHeight - 200) + 'px';
-                    w.classList.toggle('show');
-                });
-                playSound('sndGlitch');
-            }, 2000);
-
-            showMsg("CRITICAL ERROR", "SYSTEM FAILURE. RUN.", "error");
-        }
-
-        // ADDED CLICK SOUND TO BUTTONS AND ICONS
-        document.addEventListener('click', (e) => {
-            if(e.target.tagName === 'BUTTON' || e.target.closest('.d-icon') || e.target.closest('.task') || e.target.closest('.start')) {
-                playSound('sndClick');
-            }
-            if (!e.target.closest('#startMenu') && !e.target.closest('#startBtn') && !e.target.closest('#initOverlay')) { 
-                document.getElementById('startMenu').classList.remove('show'); 
-                document.getElementById('startBtn').classList.remove('active'); 
-            } 
+    // Хак для локального теста: когда игрок двигается, мы просто "вещаем" всем (тут упрощено)
+    // В полноценной версии нужна сигнальная комната. 
+    // ДЛЯ ДЕМО: Скопируй свой ID и добавь к ссылке друга: site.com?join=ТВОЙ_ID
+    
+    function setupConnection(conn) {
+        conn.on('open', () => {
+            console.log("Connected to:", conn.peer);
+            conns[conn.peer] = conn;
+            createOtherPlayer(conn.peer);
+            updatePlayerCount();
         });
-        
-        document.getElementById('chatInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') return; const k = document.getElementById('sndType'); k.currentTime=0; k.volume=0.5; k.play().catch(()=>{}); });
-        
-        // TOGGLE START (With Spam Check)
-        function toggleStart() { 
-            const m = document.getElementById('startMenu'); 
-            const b = document.getElementById('startBtn'); 
-            m.classList.toggle('show'); 
-            b.classList.toggle('active'); 
+        conn.on('data', (data) => {
+            handleData(conn.peer, data);
+        });
+        conn.on('close', () => {
+            removeOtherPlayer(conn.peer);
+            delete conns[conn.peer];
+            updatePlayerCount();
+        });
+    }
 
-            // Spam Check
-            startSpamCount++;
-            if (startSpamCount >= 10) {
-                triggerHorrorMode();
+    function createOtherPlayer(id) {
+        if(otherPlayers[id]) return;
+        // Другой игрок - это просто призрачная сфера
+        const geo = new THREE.SphereGeometry(1, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+        const mesh = new THREE.Mesh(geo, mat);
+        
+        // Фонарик другого игрока
+        const otherLight = new THREE.SpotLight(0xffffff, 0, 30, Math.PI/6);
+        otherLight.position.set(0,0,0);
+        otherLight.target.position.set(0,0,-1); // Светит перед собой
+        mesh.add(otherLight);
+        mesh.add(otherLight.target);
+        
+        scene.add(mesh);
+        otherPlayers[id] = { mesh: mesh, light: otherLight };
+    }
+
+    function removeOtherPlayer(id) {
+        if(otherPlayers[id]) {
+            scene.remove(otherPlayers[id].mesh);
+            delete otherPlayers[id];
+        }
+    }
+
+    function handleData(id, data) {
+        if(!otherPlayers[id]) return;
+        
+        if (data.type === 'move') {
+            const p = otherPlayers[id].mesh;
+            p.position.fromArray(data.pos);
+            p.rotation.y = data.rot;
+        }
+        if (data.type === 'flashlight') {
+            otherPlayers[id].light.intensity = data.on ? 2 : 0;
+        }
+    }
+
+    function broadcast(data) {
+        for(let id in conns) {
+            conns[id].send(data);
+        }
+    }
+
+    function updatePlayerCount() {
+        document.getElementById('players-count').innerText = Object.keys(conns).length;
+    }
+
+    // --- ГЛАВНЫЙ ЦИКЛ ---
+    const clock = new THREE.Clock();
+    let lastBroadcast = 0;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        if (controls.isLocked) {
+            const delta = clock.getDelta();
+
+            // Физика движения (очень простая)
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            if (moveForward || moveBackward) velocity.z -= direction.z * 40.0 * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * 40.0 * delta;
+
+            controls.moveRight(-velocity.x * delta);
+            controls.moveForward(-velocity.z * delta);
+            
+            // Коллизии со стенами (простые, чтобы не проходить сквозь)
+            // (Опущено для краткости кода, будь аккуратен, не выходи за карту!)
+            if(camera.position.y < 2) camera.position.y = 2; // Фикс высоты
+
+            // Отправка позиции другим игрокам (раз в 50мс)
+            const now = Date.now();
+            if(now - lastBroadcast > 50 && Object.keys(conns).length > 0) {
+                const pos = camera.position;
+                const rot = camera.rotation.y; // Упрощенно берем Y поворот
+                broadcast({ 
+                    type: 'move', 
+                    pos: [pos.x, pos.y, pos.z],
+                    rot: rot 
+                });
+                lastBroadcast = now;
             }
-            // Reset spam count after 2 seconds of inactivity
-            if (window.spamTimer) clearTimeout(window.spamTimer);
-            window.spamTimer = setTimeout(() => { startSpamCount = 0; }, 2000);
         }
 
-        let zIndex=100;
-        function winClose(id) { playSound('sndClose'); document.getElementById(id).classList.remove('show'); const t = document.getElementById('task_'+id); if(t) t.style.display = 'none'; if(id === 'winMedia') stopMusic(); if(id === 'winBrowser') document.getElementById('webFrame').src = "about:blank"; }
-        function toggleWin(id) { const w=document.getElementById(id); if(w.classList.contains('show') && w.classList.contains('active')) winClose(id); else winOpen(id); }
-        function bringFront(el) { zIndex++; el.style.zIndex=zIndex; el.classList.add('active'); document.querySelectorAll('.window').forEach(w=>{ if(w!==el) { w.classList.remove('active'); w.querySelector('.title-bar').classList.add('inactive'); } }); el.querySelector('.title-bar').classList.remove('inactive'); document.querySelectorAll('.task').forEach(t=>t.classList.remove('active')); const t = document.getElementById('task_'+el.id); if(t) t.classList.add('active'); }
-        let dragEl=null, offX=0, offY=0;
-        document.querySelectorAll('.title-bar').forEach(b => { if(b.id === 'msgTitle') return; b.addEventListener('mousedown', (e) => { const w = b.parentElement; bringFront(w); dragEl=w; offX=e.clientX - w.offsetLeft; offY=e.clientY - w.offsetTop; window.addEventListener('mousemove', doDrag); window.addEventListener('mouseup', stopDrag); }); });
-        function doDrag(e) { if(dragEl) { dragEl.style.left=(e.clientX-offX)+'px'; dragEl.style.top=(e.clientY-offY)+'px'; } }
-        function stopDrag() { window.removeEventListener('mousemove', doDrag); window.removeEventListener('mouseup', stopDrag); dragEl=null; }
-    </script>
+        renderer.render(scene, camera);
+    }
+    
+    // Спавн в случайном месте (безопасном)
+    camera.position.set(0, 2, 0);
+    
+    animate();
+    
+    // Ресайз окна
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+</script>
 </body>
 </html>
-
